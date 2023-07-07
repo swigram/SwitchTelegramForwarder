@@ -17,7 +17,7 @@ from decouple import config
 
 class Var:
     API_ID = config("API_ID", default=6, cast=int)
-    API_HASH = config("API_ID")
+    API_HASH = config("API_HASH")
     SESSION = config("SESSION")
     SWITCH_BOT_TOKEN = config("SWITCH_BOT_TOKEN")
     REDISPASSWORD = config("REDISPASSWORD")
