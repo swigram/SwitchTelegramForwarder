@@ -238,8 +238,10 @@ async def msgedit(e: events.NewMessage.Event):
     target_list = await get_target_swi_channel(chat_id)
     if target_list:
         dl, media, doc = await converter(e)
-        proc = [send_message_in_switch(key, dl, media, doc) for key in target_list]
-        await asyncio.gather(*proc)
+        for key in target_list:
+            await send_message_in_switch(key, dl, media, doc)
+        # proc = [send_message_in_switch(key, dl, media, doc) for key in target_list]
+        # await asyncio.gather(*proc)
 
 # Commands Of Switch
 
