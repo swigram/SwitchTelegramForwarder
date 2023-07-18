@@ -154,7 +154,7 @@ async def converter(event: events.NewMessage.Event):
                 name = "photo_" + dt.now().isoformat("_", "seconds") + ".png"
             dl = await event.client.download_media(event.media)
             media = MediaUploadRequest(path=dl, description=event.text.replace("**", "*"))
-            return dl, media, doc
+            return event.text.replace("**", "*"), media, doc
         if event.document or event.video or event.audio:
             if not name:
                 name = "document_" + dt.now().isoformat("_", "seconds") + guess_extension(event.media.document.mime_type)
@@ -162,8 +162,8 @@ async def converter(event: events.NewMessage.Event):
             dl = await file_download(name, event, file)
             media = MediaUploadRequest(path=dl, description=event.text.replace("**", "*")) 
             doc = True
-            return dl, media, doc
-    return event.text, media, doc
+            return event.text.replace("**", "*"), media, doc
+    return event.text.replace("**", "*"), media, doc
 
 async def file_download(filename, event, file):
     async with aiofiles.open(filename, "wb") as f:
