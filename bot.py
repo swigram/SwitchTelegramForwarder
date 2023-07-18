@@ -163,10 +163,6 @@ async def converter(event: events.NewMessage.Event):
             media = MediaUploadRequest(path=dl, description=event.text.replace("**", "*")) 
             doc = True
             return dl, media, doc
-        # dl = f"{name}"
-        # dl = await event.client.download_media(
-        #     event.media,
-        # )
     return event.text, media, doc
 
 async def file_download(filename, event, file):
@@ -220,14 +216,14 @@ def get_target_swi_channel(tg_channel_id):
 
 # Sending in Switch Stuff
 
-async def send_message_in_switch(key, dl: str=None, media=None, doc=None):
+async def send_message_in_switch(key, dl: str="", media=None, doc=None):
     message = Message(sw_bot)
     communtiy_id, channel_id = key.split("|")
     message.community_id = communtiy_id
     message.channel_id = channel_id
     message.message = dl.replace("**", "*")
     message.is_document = doc
-    await message.send(media)
+    return await message.send(media)
 
 # Getting New Messages From Telegram and Streaming In Switch
 
@@ -238,8 +234,10 @@ async def msgedit(e: events.NewMessage.Event):
     target_list = await get_target_swi_channel(chat_id)
     if target_list:
         dl, media, doc = await converter(e)
+        msg = await send_message_in_switch(target_list[0], dl, media, doc)
+        target_list.pop(0)
         for key in target_list:
-            await send_message_in_switch(key, dl, media, doc)
+            await sw_bot.forward_message(msg, key.split("|")[1])
         # proc = [send_message_in_switch(key, dl, media, doc) for key in target_list]
         # await asyncio.gather(*proc)
 
@@ -257,12 +255,12 @@ async def _watch(ctx: BotContext[CommandEvent]):
     link = ctx.event.params
     if not tg_bot.is_connected():
         await tg_bot.connect()
-    if not (ctx.event.message.channel_id or ctx.event.message.community_id):
-        return await ctx.event.message.reply_text("*I Only Work In Switch Community's Channel!*")
+    if not (ctx.event.message.channel_id or ctx.event.message.community_id or ctx.event.message.group_id):
+        return await ctx.event.message.reply_text("*I Only Work In Switch Community's Channel and Groups!*")
     chat_id = await join_channel(link, tg_bot)
     if not chat_id:
         return await ctx.event.message.reply_text("`Invalid Link Or Something Went Wrong!!!`")
-    await add_to_stream(chat_id, ctx.event.message.community_id, ctx.event.message.channel_id)
+    await add_to_stream(chat_id, ctx.event.message.community_id, ctx.event.message.channel_id or ctx.event.message.group_id)
     await ctx.event.message.reply_text("*Succesfully Added The Following Telegram Channel Into Watch List.*")
 
 @sw_bot.on_command("unwatch")
@@ -272,12 +270,12 @@ async def _unwatch(ctx: BotContext[CommandEvent]):
     link = ctx.event.params
     if not tg_bot.is_connected():
         await tg_bot.connect()
-    if not (ctx.event.message.channel_id or ctx.event.message.community_id):
-        return await ctx.event.message.reply_text("*I Only Work In Switch Community's Channel!*")
+    if not (ctx.event.message.channel_id or ctx.event.message.community_id or ctx.event.message.group_id):
+        return await ctx.event.message.reply_text("*I Only Work In Switch Community's Channel and Group!*")
     chat_id = await leave_channel(link, tg_bot)
     if not chat_id:
         return await ctx.event.message.reply_text("`Invalid Link Or Something Went Wrong!!!`")
-    await remove_from_stream(chat_id, ctx.event.message.community_id, ctx.event.message.channel_id)
+    await remove_from_stream(chat_id, ctx.event.message.community_id, ctx.event.message.channel_id or ctx.event.message.group_id)
     await ctx.event.message.reply_text("*Succesfully Removed The Following Telegram Channel Into Watch List If Its Exist.*")
 
 @sw_bot.on_command("list")
@@ -289,7 +287,7 @@ async def _list(ctx: BotContext[CommandEvent]):
     if not (ctx.event.message.channel_id or ctx.event.message.community_id):
         return await ctx.event.message.reply_text("*I Only Work In Switch Community's Channel!*")
     data = await get_from_stream(ctx.event.message.community_id, ctx.event.message.channel_id)
-    txt = "*List Of Telegram Channels Currently Streaming Into This Channel*\n\n"
+    txt = "*List Of Telegram Channels Currently Streaming Into This Chat*\n\n"
     for chat_id in (data):
         try:
             u = await tg_bot.get_entity(chat_id)
