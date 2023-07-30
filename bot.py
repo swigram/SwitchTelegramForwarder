@@ -162,8 +162,8 @@ async def converter(event: events.NewMessage.Event):
             dl = await file_download(name, event, file)
             media = MediaUploadRequest(path=dl, description=event.text.replace("**", "*")) 
             doc = True
-            return event.text.replace("**", "*"), media, doc
-    return event.text.replace("**", "*"), media, doc
+            return event.text.replace("**", "* "), media, doc
+    return event.text.replace("**", "* "), media, doc
 
 async def file_download(filename, event, file):
     async with aiofiles.open(filename, "wb") as f:
@@ -221,7 +221,7 @@ async def send_message_in_switch(key, dl: str="", media=None, doc=None):
     communtiy_id, channel_id = key.split("|")
     message.community_id = communtiy_id
     message.channel_id = channel_id
-    message.message = dl.replace("**", "*")
+    message.message = dl.replace("**", "* ")
     message.is_document = doc
     return await message.send(media)
 
