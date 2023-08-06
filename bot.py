@@ -222,6 +222,7 @@ async def send_message_in_switch(key, dl: str="", media=None, doc=None):
     message.community_id = communtiy_id
     message.channel_id = channel_id
     message.message = dl.replace("**", "* ")
+    print(message.messag)
     message.is_document = doc
     return print(await message.send(media))
 
