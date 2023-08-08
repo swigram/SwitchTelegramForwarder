@@ -222,9 +222,9 @@ async def send_message_in_switch(key, dl: str="", media=None, doc=None):
     message.community_id = communtiy_id
     message.channel_id = channel_id
     message.message = dl.replace("**", "* ")
-    print(message.messag)
+    print(message.message)
     message.is_document = doc
-    return print(await message.send(media))
+    return print(await app.send_message(message, media))
 
 # Getting New Messages From Telegram and Streaming In Switch
 
