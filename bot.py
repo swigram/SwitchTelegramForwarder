@@ -86,6 +86,9 @@ def run_async(function):
 
     return wrapper
 
+def replace(dl):
+    return dl.replace("**", " * ").replace("__", " __ ")
+
 HELP = """
 Hey {}
 
@@ -150,20 +153,22 @@ async def converter(event: events.NewMessage.Event):
         except:
             name = None
         if event.photo:
+            text = replace(event.text)
             if not name:
                 name = "photo_" + dt.now().isoformat("_", "seconds") + ".png"
             dl = await event.client.download_media(event.media)
-            media = MediaUploadRequest(path=dl, description=event.text.replace("**", "*"))
-            return event.text.replace("**", "*"), media, doc
+            media = MediaUploadRequest(path=dl, description=name, thumbnail=dl)
+            return text, media, doc
         if event.document or event.video or event.audio:
             if not name:
                 name = "document_" + dt.now().isoformat("_", "seconds") + guess_extension(event.media.document.mime_type)
             file = event.media.document
+            text = replace(event.text)
             dl = await file_download(name, event, file)
-            media = MediaUploadRequest(path=dl, description=event.text.replace("**", "*")) 
+            media = MediaUploadRequest(path=dl, description=name) 
             doc = True
-            return event.text.replace("**", "* "), media, doc
-    return event.text.replace("**", "* "), media, doc
+            return text, media, doc
+    return replace(event.text), media, doc
 
 async def file_download(filename, event, file):
     async with aiofiles.open(filename, "wb") as f:
@@ -221,7 +226,7 @@ async def send_message_in_switch(key, dl: str="", media=None, doc=None):
     communtiy_id, channel_id = key.split("|")
     message.community_id = communtiy_id
     message.channel_id = channel_id
-    message.message = dl.replace("**", " * ")
+    message.message = replace(dl)
     print(message.message)
     message.is_document = doc
     return print(await sw_bot.send_message(message, media))
@@ -238,7 +243,10 @@ async def msgedit(e: events.NewMessage.Event):
         msg = await send_message_in_switch(target_list[0], dl, media, doc)
         target_list.pop(0)
         for key in target_list:
+        try:
             await sw_bot.forward_message(msg, key.split("|")[1])
+        except:
+            pass
         # proc = [send_message_in_switch(key, dl, media, doc) for key in target_list]
         # await asyncio.gather(*proc)
 
@@ -302,3 +310,4 @@ async def _list(ctx: BotContext[CommandEvent]):
 
 tg_bot.loop.run_until_complete(sync_db_into_local())
 sw_bot.run()
+
