@@ -243,10 +243,10 @@ async def msgedit(e: events.NewMessage.Event):
         msg = await send_message_in_switch(target_list[0], dl, media, doc)
         target_list.pop(0)
         for key in target_list:
-        try:
-            await sw_bot.forward_message(msg, key.split("|")[1])
-        except:
-            pass
+            try:
+                await sw_bot.forward_message(msg, key.split("|")[1])
+            except:
+                pass
         # proc = [send_message_in_switch(key, dl, media, doc) for key in target_list]
         # await asyncio.gather(*proc)
 
