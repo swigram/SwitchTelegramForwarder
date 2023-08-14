@@ -134,12 +134,15 @@ async def join_channel(channel_id_text, client):
         LOGS.error(format_exc())
         return False
     
-async def leave_channel(channel_id_text, client):
+async def leave_channel(channel_id_text, client: TelegramClient):
     chat, hash = link_parser_tg(channel_id_text)
     try:
         if hash:
-            ch = await client(CheckChatInviteRequest(chat))
-            if getattr(ch, "left", None):
+            try:
+                user = await client.get_permissions(chat, "me")
+            except UserNotParticipantError:
+                pass
+            if user.has_left:
                 return True
             chat = ch.id
         ch = await client(LeaveChannelRequest(chat))
@@ -204,7 +207,7 @@ async def add_to_stream(tg_channel_id, sw_community_id, sw_channel_id):
         CACHE[key] = _data
         await dB.set("DATAS", str(data))
 
-async def remove_from_stream(tg_channel_id, sw_community_id, sw_channel_id):
+async def remove_from_stream(tg_channel_id, msg, sw_community_id, sw_channel_id):
     data = eval((await dB.get("DATAS")) or "{}")
     key = f"{sw_community_id}|{sw_channel_id}"
     _data = data.get(key) or []
@@ -213,6 +216,11 @@ async def remove_from_stream(tg_channel_id, sw_community_id, sw_channel_id):
         data.update({key: _data})
         CACHE[key] = _data
         await dB.set("DATAS", str(data))
+        await msg.reply_text("*Succesfully Removed The Following Telegram Channel Into Watch List If Its Exist.*")
+
+    else:
+        await msg.reply_text("`Invalid Link Or Something Went Wrong!!!`")
+
 
 @run_async
 def get_from_stream(sw_community_id, sw_channel_id):
@@ -295,11 +303,8 @@ async def _unwatch(ctx: BotContext[CommandEvent]):
     if not (ctx.event.message.channel_id and ctx.event.message.community_id):
         return await ctx.event.message.reply_text("*I Only Work In Switch Community's Channel!*")
     chat_id = await leave_channel(link, tg_bot)
-    if not chat_id:
-        return await ctx.event.message.reply_text("`Invalid Link Or Something Went Wrong!!!`")
-    await remove_from_stream(chat_id, ctx.event.message.community_id, ctx.event.message.channel_id)
-    await ctx.event.message.reply_text("*Succesfully Removed The Following Telegram Channel Into Watch List If Its Exist.*")
-
+    await remove_from_stream(chat_id, ctx.event.message, ctx.event.message.community_id, ctx.event.message.channel_id)
+    
 @sw_bot.on_command("list")
 async def _list(ctx: BotContext[CommandEvent]):
     # if not ctx.event.message.user.admin:
