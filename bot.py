@@ -13,7 +13,7 @@
 # License can be found in <
 # https://github.com/swigram/SwitchTelegramForwarder/blob/main/LICENSE > .
 
-import asyncio, multiprocessing, aiofiles
+import asyncio, multiprocessing, aiofiles, os
 
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
@@ -89,6 +89,9 @@ def run_async(function):
 def replace(dl):
     return dl.replace("**", " * ").replace("__", " __ ")
 
+def replace(dl):
+    return dl.replace("**", " * ").replace("__", " __ ")
+
 HELP = """
 Hey {}
 
@@ -154,21 +157,26 @@ async def converter(event: events.NewMessage.Event):
             name = None
         if event.photo:
             text = replace(event.text)
+            text = replace(event.text)
             if not name:
                 name = "photo_" + dt.now().isoformat("_", "seconds") + ".png"
             dl = await event.client.download_media(event.media)
-            media = MediaUploadRequest(path=dl, description=text, thumbnail=dl)
-            return text, media, doc
+            media = MediaUploadRequest(path=dl, description=name, thumbnail=dl)
+            return text, media, doc, dl
         if event.document or event.video or event.audio:
             if not name:
                 name = "document_" + dt.now().isoformat("_", "seconds") + guess_extension(event.media.document.mime_type)
+            thumb = None
+            if event.file.media.thumbs:
+                thumb = await event.download_media(thumb=-1)
             file = event.media.document
             text = replace(event.text)
+            text = replace(event.text)
             dl = await file_download(name, event, file)
-            media = MediaUploadRequest(path=dl, description=text) 
+            media = MediaUploadRequest(path=dl, description=name, thumbnail=thumb) 
             doc = True
-            return text, media, doc
-    return replace(event.text), media, doc
+            return text, media, doc, dl
+    return replace(event.text), media, doc, None
 
 async def file_download(filename, event, file):
     async with aiofiles.open(filename, "wb") as f:
@@ -229,7 +237,7 @@ async def send_message_in_switch(key, dl: str="", media=None, doc=None):
     message.message = replace(dl)
     print(message.message)
     message.is_document = doc
-    return print(await sw_bot.send_message(message, media))
+    return await sw_bot.send_message(message, media)
 
 # Getting New Messages From Telegram and Streaming In Switch
 
@@ -239,11 +247,19 @@ async def msgedit(e: events.NewMessage.Event):
     chat_id = get_peer_id(ch)
     target_list = await get_target_swi_channel(chat_id)
     if target_list:
-        dl, media, doc = await converter(e)
+        dl, media, doc, path = await converter(e)
         msg = await send_message_in_switch(target_list[0], dl, media, doc)
+        try:
+            if path:
+                os.remove(path)
+        except:
+            pass
         target_list.pop(0)
         for key in target_list:
-            await sw_bot.forward_message(msg, key.split("|")[1])
+            try:
+                await msg.forward_to(key.split("|")[1])
+            except BaseException:
+                print(format_exc())
         # proc = [send_message_in_switch(key, dl, media, doc) for key in target_list]
         # await asyncio.gather(*proc)
 
@@ -261,12 +277,12 @@ async def _watch(ctx: BotContext[CommandEvent]):
     link = ctx.event.params
     if not tg_bot.is_connected():
         await tg_bot.connect()
-    if not (ctx.event.message.channel_id or ctx.event.message.community_id or ctx.event.message.group_id):
-        return await ctx.event.message.reply_text("*I Only Work In Switch Community's Channel and Groups!*")
+    if not (ctx.event.message.channel_id and ctx.event.message.community_id):
+        return await ctx.event.message.reply_text("*I Only Work In Switch Community's Channel!*")
     chat_id = await join_channel(link, tg_bot)
     if not chat_id:
         return await ctx.event.message.reply_text("`Invalid Link Or Something Went Wrong!!!`")
-    await add_to_stream(chat_id, ctx.event.message.community_id, ctx.event.message.channel_id or ctx.event.message.group_id)
+    await add_to_stream(chat_id, ctx.event.message.community_id, ctx.event.message.channel_id)
     await ctx.event.message.reply_text("*Succesfully Added The Following Telegram Channel Into Watch List.*")
 
 @sw_bot.on_command("unwatch")
@@ -276,12 +292,12 @@ async def _unwatch(ctx: BotContext[CommandEvent]):
     link = ctx.event.params
     if not tg_bot.is_connected():
         await tg_bot.connect()
-    if not (ctx.event.message.channel_id or ctx.event.message.community_id or ctx.event.message.group_id):
-        return await ctx.event.message.reply_text("*I Only Work In Switch Community's Channel and Group!*")
+    if not (ctx.event.message.channel_id and ctx.event.message.community_id):
+        return await ctx.event.message.reply_text("*I Only Work In Switch Community's Channel!*")
     chat_id = await leave_channel(link, tg_bot)
     if not chat_id:
         return await ctx.event.message.reply_text("`Invalid Link Or Something Went Wrong!!!`")
-    await remove_from_stream(chat_id, ctx.event.message.community_id, ctx.event.message.channel_id or ctx.event.message.group_id)
+    await remove_from_stream(chat_id, ctx.event.message.community_id, ctx.event.message.channel_id)
     await ctx.event.message.reply_text("*Succesfully Removed The Following Telegram Channel Into Watch List If Its Exist.*")
 
 @sw_bot.on_command("list")
@@ -290,7 +306,7 @@ async def _list(ctx: BotContext[CommandEvent]):
     #     return await ctx.event.message.reply_text("I Only Work In For Community Admins!")
     if not tg_bot.is_connected():
         await tg_bot.connect()
-    if not (ctx.event.message.channel_id or ctx.event.message.community_id):
+    if not (ctx.event.message.channel_id and ctx.event.message.community_id):
         return await ctx.event.message.reply_text("*I Only Work In Switch Community's Channel!*")
     data = await get_from_stream(ctx.event.message.community_id, ctx.event.message.channel_id)
     txt = "*List Of Telegram Channels Currently Streaming Into This Chat*\n\n"
@@ -307,3 +323,4 @@ async def _list(ctx: BotContext[CommandEvent]):
 
 tg_bot.loop.run_until_complete(sync_db_into_local())
 sw_bot.run()
+
