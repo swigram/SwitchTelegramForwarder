@@ -18,8 +18,9 @@ from decouple import config
 class Var:
     API_ID = config("API_ID", default=6, cast=int)
     API_HASH = config("API_HASH")
-    SESSION = config("SESSION")
-    SWITCH_BOT_TOKEN = config("SWITCH_BOT_TOKEN")
-    REDISPASSWORD = config("REDISPASSWORD")
-    REDIS_URL = config("REDIS_URL")
+    SESSION = config("SESSION", default="")
+    SWITCH_BOT_TOKEN = config("SWITCH_BOT_TOKEN", default="")
+    TG_BOT_TOKEN = config("TG_BOT_TOKEN", default="")
+    REDISPASSWORD = config("REDISPASSWORD", default="")
+    REDIS_URL = config("REDIS_URL", default="")
     REDISUSER = config("REDISUSER", default="default")

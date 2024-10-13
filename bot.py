@@ -19,8 +19,9 @@ from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
+from telethon.errors import UserNotParticipantError
 from telethon.utils import get_peer_id
-from swibots import BotApp, RegisterCommand, BotContext, CommandEvent, Message, MediaUploadRequest
+from swibots import BotApp, BotCommand, BotContext, CommandEvent, Message, InlineKeyboardButton,InlineMarkup
 from aioredis import Redis
 from logging import INFO, basicConfig, getLogger
 from var import Var
@@ -43,7 +44,12 @@ TelethonLogger.setLevel(INFO)
 
 try:
     LOGS.info("Trying Connect With Telegram")
-    tg_bot = TelegramClient(StringSession(Var.SESSION), Var.API_ID, Var.API_HASH).start()
+    if Var.SESSION:
+        tg_bot = TelegramClient(StringSession(Var.SESSION), Var.API_ID, Var.API_HASH).start()
+    else:
+        tg_bot = TelegramClient("session", Var.API_ID, Var.API_HASH).start(
+            bot_token=Var.TG_BOT_TOKEN
+        )
     LOGS.info("Successfully Connected with Telegram")
     LOGS.info("Trying Connect With Switch")
     sw_bot = BotApp(Var.SWITCH_BOT_TOKEN, "Stream Messages From Telegram Into Switch")
@@ -67,11 +73,11 @@ except Exception as es:
 
 # Registering Switch Commands
 
-sw_bot.register_command([
-    RegisterCommand("start", "To Get Help", True),
-    RegisterCommand("watch", "To Stream Messages On Current Switch Channel", True),
-    RegisterCommand("list", "To Get List Of Telegram Channels Which Are Currently Streaming In Switch Channel", True),
-    RegisterCommand("unwatch", "To Stop Streaming Of Messages From Given Telegram Channel Into This Switch Channel", True),
+sw_bot.set_bot_commands([
+    BotCommand("start", "To Get Help", True),
+    BotCommand("watch", "To Stream Messages On Current Switch Channel", True),
+    BotCommand("list", "To Get List Of Telegram Channels Which Are Currently Streaming In Switch Channel", True),
+    BotCommand("unwatch", "To Stop Streaming Of Messages From Given Telegram Channel Into This Switch Channel", True),
 ]) 
 
 # func and variable
@@ -89,8 +95,6 @@ def run_async(function):
 def replace(dl):
     return dl.replace("**", " * ").replace("__", " __ ")
 
-def replace(dl):
-    return dl.replace("**", " * ").replace("__", " __ ")
 
 HELP = """
 Hey {}
@@ -121,15 +125,19 @@ def link_parser_tg(link):
         chat = link.strip().split()[0]
     return chat, hash
 
-async def join_channel(channel_id_text, client):
+async def join_channel(channel_id_text, client: TelegramClient):
     chat, hash = link_parser_tg(channel_id_text)
     try:
         if hash:
             ch = await client(ImportChatInviteRequest(chat))
             return get_peer_id(ch.chats[0])
         else:
-            ch = await client(JoinChannelRequest(chat))
-            return get_peer_id(ch.chats[0])
+            if await client.is_bot():
+                chat = await client.get_entity(chat)
+                return get_peer_id(chat)
+            else:
+                ch = await client(JoinChannelRequest(chat))
+                return get_peer_id(ch.chats[0])
     except BaseException:
         LOGS.error(format_exc())
         return False
@@ -150,7 +158,23 @@ async def leave_channel(channel_id_text, client: TelegramClient):
     except BaseException:
         LOGS.error(format_exc())
         return False
-    
+
+def get_markup(event: events.NewMessage.Event):
+    buttons = []
+    if event.buttons:
+        for button in event.buttons:
+            row = []
+            for btn in button:
+                if getattr(btn, "url", None):
+                    row.append(InlineKeyboardButton(btn.text, url=btn.url))
+                else:
+                    row.append(InlineKeyboardButton(btn.text, callback_data=btn.data))
+            if row:
+                buttons.append(row)
+    if buttons:
+        return InlineMarkup(buttons)
+
+
 async def converter(event: events.NewMessage.Event):
     media, name, file, doc = None, None, None, False
     if event.media:
@@ -164,9 +188,8 @@ async def converter(event: events.NewMessage.Event):
             if not name:
                 name = "photo_" + dt.now().isoformat("_", "seconds") + ".png"
             dl = await event.client.download_media(event.media)
-            media = MediaUploadRequest(path=dl, description=name, thumbnail=dl)
-            return text, media, doc, dl
-        if event.document or event.video or event.audio:
+            return text, dl, doc, dl, get_markup(event)
+        if event.document or event.video or event.audio or event.sticker:
             if not name:
                 name = "document_" + dt.now().isoformat("_", "seconds") + guess_extension(event.media.document.mime_type)
             thumb = None
@@ -176,10 +199,10 @@ async def converter(event: events.NewMessage.Event):
             text = replace(event.text)
             text = replace(event.text)
             dl = await file_download(name, event, file)
-            media = MediaUploadRequest(path=dl, description=name, thumbnail=thumb) 
             doc = True
-            return text, media, doc, dl
-    return replace(event.text), media, doc, None
+            return text, name, doc, dl, get_markup(event)
+
+    return replace(event.text), media, doc, None, None
 
 async def file_download(filename, event, file):
     async with aiofiles.open(filename, "wb") as f:
@@ -237,15 +260,17 @@ def get_target_swi_channel(tg_channel_id):
 
 # Sending in Switch Stuff
 
-async def send_message_in_switch(key, dl: str="", media=None, doc=None):
-    message = Message(sw_bot)
+async def send_message_in_switch(key, dl: str="", media=None, doc=None, markup=None):
     communtiy_id, channel_id = key.split("|")
-    message.community_id = communtiy_id
-    message.channel_id = channel_id
-    message.message = replace(dl)
-    print(message.message)
-    message.is_document = doc
-    return await sw_bot.send_message(message, media)
+    print(communtiy_id, channel_id, dl, media, doc)
+    return await sw_bot.send_message(
+        community_id=communtiy_id,
+        channel_id=channel_id,
+        message=replace(dl),
+        document=media,
+        media_type=7 if doc else None,
+        inline_markup=markup
+    )
 
 # Getting New Messages From Telegram and Streaming In Switch
 
@@ -253,29 +278,30 @@ async def send_message_in_switch(key, dl: str="", media=None, doc=None):
 async def msgedit(e: events.NewMessage.Event):
     ch = await e.get_chat()
     chat_id = get_peer_id(ch)
+    print(chat_id)
     target_list = await get_target_swi_channel(chat_id)
+    print(target_list)
     if target_list:
-        dl, media, doc, path = await converter(e)
-        msg = await send_message_in_switch(target_list[0], dl, media, doc)
-        try:
-            if path:
-                os.remove(path)
-        except:
-            pass
+        dl, media, doc, path, markup = await converter(e)
+        msg = await send_message_in_switch(target_list[0], dl, media, doc, markup)
+        for paths in [path, media]:
+            try:
+                if paths:
+                    os.remove(path)
+            except:
+                pass
         target_list.pop(0)
         for key in target_list:
             try:
                 await msg.forward_to(key.split("|")[1])
             except BaseException:
                 print(format_exc())
-        # proc = [send_message_in_switch(key, dl, media, doc) for key in target_list]
-        # await asyncio.gather(*proc)
 
 # Commands Of Switch
 
 @sw_bot.on_command("start")
 async def _start(ctx: BotContext[CommandEvent]):
-    await ctx.reply_message_text(ctx.event.message, HELP.format(ctx.event.message.user.name))
+    await ctx.event.message.reply_text(HELP.format(ctx.event.message.user.name))
 
 
 @sw_bot.on_command("watch")
