@@ -49,6 +49,7 @@ Follow these steps to set up and run the SwitchTelegramForwarder:
    API_HASH=your_api_hash
    TG_BOT_TOKEN=your_telegram_bot_token
    SESSION=your_telethon_session_string
+   SWITCH_BOT_TOKEN=your_switch_bot_token
    REDISPASSWORD=your_redis_password
    REDIS_URL=your_redis_url
    REDISUSER=your_redis_username
